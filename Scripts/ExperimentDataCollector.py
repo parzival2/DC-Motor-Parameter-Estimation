@@ -51,12 +51,12 @@ class ExperimentDataCollector(QWidget, Ui_Form):
             self.__angleDataCurve = pg.PlotCurveItem()
             self.graphicsView.addItem(self.__angleDataCurve)
             # Open csv file to write
-            csvFileObj = open("ValidationData.csv", mode='w', newline='')
+            csvFileObj = open("Experiment_Rpm.csv", mode='w', newline='')
             self.__csvWriterObj = csv.writer(csvFileObj)
             self.__csvWriterObj.writerow(['Timestamp', 'Angle in deg'])
 
     def __onStartButtonClicked(self):
-        message = "valid\r\n"
+        message = "start\r\n"
         self.__serialPort.write(message.encode())
         self.__angleDataCurve.clear()
         self.__timeStampArray.clear()
@@ -70,7 +70,8 @@ class ExperimentDataCollector(QWidget, Ui_Form):
             floatsfound = numbersRegex.findall(strBytesRead)
             if(floatsfound):
                 timestamp = float(floatsfound[0])
-                angle = float(floatsfound[1]) * 57.2958
+                # Getting the data in RPS(frequency) convert it into RPM.
+                angle = float(floatsfound[1]) * 60.0
                 self.__timeStampArray.append(timestamp)
                 self.__angleArray.append(angle)
                 self.__angleDataCurve.setData(self.__timeStampArray, self.__angleArray)

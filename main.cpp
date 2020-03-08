@@ -119,43 +119,41 @@ static void start_experiment(BaseSequentialStream *chp, int argc, char* argv[])
     double lastAngle = 0.;
     double currentAngle = 0.;
     double angularVelocity = 0.;
-    double time = 0.;
-    QuadEncoder::Direction direction;
+    uint16_t time = 0;
+    double doubleTime = 0;
     char* dirString;
     uint16_t qei;
-    uint16_t directionTime = 0;
-    /*
-    * Enable channel 0 with 50% duty cycle
-    */
-    pwmEnableChannel(&PWMD4, 0, PWM_PERCENTAGE_TO_WIDTH(&PWMD4, 2000));
+    
     // Also create thread for direction.
     // Run for only 10 seconds
     // Reset the encoder first
     quadEncoder.reset();
-    while(time < 5.)
+    while(time < 10000)
     {
         qei = quadEncoder.getPulseCount();
-        direction = quadEncoder.getCurrentDirection();
-        if(direction == QuadEncoder::Direction::FORWARD)
-        {
-            dirString = "Forward";
-        }
-        else if(direction == QuadEncoder::Direction::REVERSE)
-        {
-            dirString = "Reverse";
-        }
         // Calculate angular velocity
         currentAngle = quadEncoder.getCurrentAngleRad();
-        angularVelocity = (ONE_BY_TWO_PI * (currentAngle - lastAngle)) / 0.5;
-        chprintf(chp, "%f, %f\n", time, quadEncoder.getCurrentAngleRad());
-        time += 0.005;
+        angularVelocity = (ONE_BY_TWO_PI * (currentAngle - lastAngle)) / 0.005;
+        chprintf(chp, "%f, %f\n", doubleTime, angularVelocity);
+        time += 5;
+        doubleTime += 0.005;
         lastAngle = currentAngle;
-        if(directionTime == 250)
+        if(time == 1000)
         {
-            palTogglePad(GPIOA, 5);
-            directionTime = 0;
+            pwmEnableChannel(&PWMD4, 0, PWM_PERCENTAGE_TO_WIDTH(&PWMD4, 2000));
         }
-        directionTime += 5;
+        if(time == 3000)
+        {
+            pwmDisableChannel(&PWMD4, 0);
+        }
+        if(time == 5000)
+        {
+            pwmEnableChannel(&PWMD4, 0, PWM_PERCENTAGE_TO_WIDTH(&PWMD4, 2000));
+        }
+        if(time == 7000)
+        {
+            pwmDisableChannel(&PWMD4, 0);
+        }
         chThdSleepMilliseconds(5);
     }
     // Reset the encoder before exiting

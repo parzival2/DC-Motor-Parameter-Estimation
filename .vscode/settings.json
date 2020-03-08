@@ -2,5 +2,6 @@
     "files.associations": {
         "*.sdf": "xml",
         "hal.h": "c"
-    }
+    },
+    "C_Cpp.errorSquiggles": "Disabled"
 }

@@ -1,0 +1,10 @@
+clear all;
+clc;
+%% Read csv file
+csvMatrix = readmatrix('ExperimentData.csv');
+exTimestamp = csvMatrix(:, 1);
+exAngle = csvMatrix(:, 2);
+% Plot the simulation data along with real experiment data
+plot(exTimestamp, exAngle);
+hold on;
+plot(sim_Ang

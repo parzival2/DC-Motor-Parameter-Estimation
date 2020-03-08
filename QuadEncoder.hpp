@@ -56,6 +56,12 @@ class QuadEncoder
 		{
 			return mCurrentAngleRad;
 		}
+		void reset()
+		{
+			mCurrentAngleRad = 0.;
+			mCurrentDirection = Direction::FORWARD;
+			mCurrentPulseCount = 0;
+		}
 	private:
 		/**
 		 * The Quadrature encoder driver that will be used

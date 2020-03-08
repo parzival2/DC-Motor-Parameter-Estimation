@@ -16,6 +16,9 @@
 #include "usbcfg.h"
 #include "chprintf.h"
 #include "QuadEncoder.hpp"
+#include "shell.h"
+
+#define SHELL_WA_SIZE   THD_WORKING_AREA_SIZE(2048)
 /**
  * PWM Config
  */
@@ -49,31 +52,173 @@ static QEIConfig qeicfg = {
     NULL,
   };
 
+// Initialize the Quadrature Encoder
 QuadEncoder quadEncoder(&QEID3, &qeicfg);
 
+// Base sequential stream for printing on terminal
 BaseSequentialStream *chp = (BaseSequentialStream *)(&SDU1);
 
+// Constants
 static constexpr double ONE_BY_TWO_PI =  0.15915494309;
 
+// Variables
+bool stopCommandIssued = false;
+
+/**
+ * Handles the interrupt. Just a hack to satisfy chibios as it needs
+ * a static function for handling interrupt
+ */
 void handleInterrupt(void *arg)
 {
     (void)arg;
     quadEncoder.handlePinAInterrupt();
 }
 
-/* Thread definition */
-static THD_WORKING_AREA(changeDirection, 128);
-static THD_FUNCTION(dirThread, arg){
-	(void)arg;
-	/* Set thread name */
-	chRegSetThreadName("dirThread");
-	/* Thread should not return, so begin a while loop */
-	while(TRUE)
-	{
-        palTogglePad(GPIOA, 5);
-		chThdSleepMilliseconds(250);
-	}
+/** 
+ * Prints the angle until a stop command is issued.
+ */
+static void print_angle(BaseSequentialStream *chp, int argc, char *argv[])
+{
+    (void) argv;
+    // Reset the encoder first
+    quadEncoder.reset();
+    double currentAngle;
+    char* dirString;
+    QuadEncoder::Direction direction;
+    stopCommandIssued = false;
+    while(!stopCommandIssued)
+    {
+        direction = quadEncoder.getCurrentDirection();
+        if(direction == QuadEncoder::Direction::FORWARD)
+        {
+            dirString = "Forward";
+        }
+        else if(direction == QuadEncoder::Direction::REVERSE)
+        {
+            dirString = "Reverse";
+        }
+        // Calculate angular velocity
+        currentAngle = quadEncoder.getCurrentAngleRad();
+        chprintf(chp, "Angle : %f, Direction : %s \n", currentAngle, dirString);
+        chThdSleepMilliseconds(50);
+    }
+    chThdExit(0);
 }
+
+/**
+ * The experiment function.
+ * This will set the PWM to 50% of the duty cycle. The maximum voltage of 
+ * 6V has been set in the laboratory power supply and with 50% duty cycle
+ * it will be about ~3V and the direction is switched about every 250ms as 
+ * it has been done in the matlab simulation.
+ */
+static void start_experiment(BaseSequentialStream *chp, int argc, char* argv[])
+{
+    (void) argv;
+    // last angle
+    double lastAngle = 0.;
+    double currentAngle = 0.;
+    double angularVelocity = 0.;
+    double time = 0.;
+    QuadEncoder::Direction direction;
+    char* dirString;
+    uint16_t qei;
+    uint16_t directionTime = 0;
+    /*
+    * Enable channel 0 with 50% duty cycle
+    */
+    pwmEnableChannel(&PWMD4, 0, PWM_PERCENTAGE_TO_WIDTH(&PWMD4, 2000));
+    // Also create thread for direction.
+    // Run for only 10 seconds
+    // Reset the encoder first
+    quadEncoder.reset();
+    while(time < 5.)
+    {
+        qei = quadEncoder.getPulseCount();
+        direction = quadEncoder.getCurrentDirection();
+        if(direction == QuadEncoder::Direction::FORWARD)
+        {
+            dirString = "Forward";
+        }
+        else if(direction == QuadEncoder::Direction::REVERSE)
+        {
+            dirString = "Reverse";
+        }
+        // Calculate angular velocity
+        currentAngle = quadEncoder.getCurrentAngleRad();
+        angularVelocity = (ONE_BY_TWO_PI * (currentAngle - lastAngle)) / 0.5;
+        chprintf(chp, "%f, %f\n", time, quadEncoder.getCurrentAngleRad());
+        time += 0.005;
+        lastAngle = currentAngle;
+        if(directionTime == 250)
+        {
+            palTogglePad(GPIOA, 5);
+            directionTime = 0;
+        }
+        directionTime += 5;
+        chThdSleepMilliseconds(5);
+    }
+    // Reset the encoder before exiting
+    quadEncoder.reset();
+    pwmDisableChannel(&PWMD4, 0);
+    chThdExit(0);
+}
+
+static void start_validation(BaseSequentialStream *chp, int argc, char *argv[])
+{
+    (void) argv;
+    // Start validation
+    // last angle
+    double currentAngle = 0.;
+    double time = 0.;
+    uint16_t totalTime = 0;
+    // Also create thread for direction.
+    // Run for only 10 seconds
+    // Reset the encoder first
+    quadEncoder.reset();
+    while(totalTime < 5000)
+    {
+        // Calculate angular velocity
+        currentAngle = quadEncoder.getCurrentAngleRad();
+        chprintf(chp, "%f, %f\n", time, quadEncoder.getCurrentAngleRad());
+        totalTime += 5;
+        time += 0.005;
+        if(totalTime == 750)
+        {
+            pwmEnableChannel(&PWMD4, 0, PWM_PERCENTAGE_TO_WIDTH(&PWMD4, 2000));
+        }
+        if(totalTime == 1000)
+        {
+            palTogglePad(GPIOA, 5);
+        }
+        if(totalTime == 1500)
+        {
+            palTogglePad(GPIOA, 5);
+        }
+        if(totalTime == 1750)
+        {
+            pwmDisableChannel(&PWMD4, 0);
+        }
+        chThdSleepMilliseconds(5);
+    }
+    // Reset the encoder before exiting
+    quadEncoder.reset();
+    chThdExit(0);
+}
+
+// Shell commands
+static const ShellCommand commands[] = {
+    {"start", start_experiment},
+    {"print", print_angle},
+    {"valid", start_validation},
+    {NULL, NULL}
+};
+
+// Shell config
+static const ShellConfig shell_cfg1 = {
+    (BaseSequentialStream *)&SDU1,
+    commands
+};
 
 
 /*
@@ -117,47 +262,27 @@ int main(void) {
   palEnableLineEvent(PAL_LINE(GPIOA, 7U), PAL_EVENT_MODE_BOTH_EDGES);
   palSetPadCallback(GPIOA, 6, handleInterrupt, NULL);
 
-  // Set alternate function for PB6 and PB7 for PWM outputs
+  // Set alternate function for PB6 for PWM outputs
   palSetPadMode(GPIOB, 6, PAL_MODE_STM32_ALTERNATE_OPENDRAIN);
   pwmStart(&PWMD4, &pwmCFG);
 
   // Set mode for dir pin
   palSetPadMode(GPIOA, 5, PAL_MODE_OUTPUT_PUSHPULL);
-  /*
-   * Enable channel 0 with 50% duty cycle
-   */
-  pwmEnableChannel(&PWMD4, 0, PWM_PERCENTAGE_TO_WIDTH(&PWMD4, 2000));
 
+  // Initialize shell
+  shellInit();
   AFIO->MAPR |= AFIO_MAPR_TIM3_REMAP_NOREMAP;
-
-  uint16_t qei;
-  QuadEncoder::Direction direction;
-  char* dirString;
-  chThdCreateStatic(changeDirection, sizeof(changeDirection),
-                    NORMALPRIO+1, dirThread, NULL);
-
-  // last angle
-  double lastAngle = 0.;
-  double currentAngle = 0.;
-  double angularVelocity = 0.;
-  double time = 0.;
+  
+//   chThdCreateStatic(changeDirection, sizeof(changeDirection),
+//                     NORMALPRIO+1, dirThread, NULL);
   while (1) {
-     qei = quadEncoder.getPulseCount();
-     direction = quadEncoder.getCurrentDirection();
-     if(direction == QuadEncoder::Direction::FORWARD)
-     {
-         dirString = "Forward";
-     }
-     else if(direction == QuadEncoder::Direction::REVERSE)
-     {
-         dirString = "Reverse";
-     }
-     // Calculate angular velocity
-     currentAngle = quadEncoder.getCurrentAngleRad();
-     angularVelocity = (ONE_BY_TWO_PI * (currentAngle - lastAngle)) / 0.5;
-     chprintf(chp, "%f, %f\n", time, quadEncoder.getCurrentAngleRad());
-     time += 0.005;
-     lastAngle = currentAngle;
-     chThdSleepMilliseconds(5);
+      if(serusbcfg.usbp->state == USB_ACTIVE)
+      {
+          thread_t *shelltp = chThdCreateFromHeap(NULL, SHELL_WA_SIZE,
+                                              "shell", NORMALPRIO + 1,
+                                              shellThread, (void *)&shell_cfg1);
+          chThdWait(shelltp); 
+      }
+     chThdSleepMilliseconds(1000);
   }
 }

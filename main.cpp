@@ -107,10 +107,10 @@ static void print_angle(BaseSequentialStream *chp, int argc, char *argv[])
 
 /**
  * The experiment function.
- * This will set the PWM to 50% of the duty cycle. The maximum voltage of 
- * 6V has been set in the laboratory power supply and with 50% duty cycle
- * it will be about ~3V and the direction is switched about every 250ms as 
- * it has been done in the matlab simulation.
+ * This will set the PWM to 20% of the duty cycle. The maximum voltage of 
+ * 15V has been set in the laboratory power supply and with 20% duty cycle
+ * it will be about ~3V and the motor is switched off like the signal built
+ * using matlab.
  */
 static void start_experiment(BaseSequentialStream *chp, int argc, char* argv[])
 {
@@ -269,10 +269,8 @@ int main(void) {
 
   // Initialize shell
   shellInit();
+  // This is important for correct detection of edges and creating interrupts.
   AFIO->MAPR |= AFIO_MAPR_TIM3_REMAP_NOREMAP;
-  
-//   chThdCreateStatic(changeDirection, sizeof(changeDirection),
-//                     NORMALPRIO+1, dirThread, NULL);
   while (1) {
       if(serusbcfg.usbp->state == USB_ACTIVE)
       {

@@ -9,8 +9,8 @@ clc;
 % DC_Motor_R = 11.4; %ohm 
 
 %% The new estimated parameters are
-DC_Motor_B = 2.917892194167478e-06;
-DC_Motor_J = 4.665458882244124e-07;
-DC_Motor_K = 0.002298180134359;
-DC_Motor_L = 6.606598926326293e-05;
-DC_Motor_R = 0.001197533240505;
+DC_Motor_B = 1.2011e-05;
+DC_Motor_J = 1.7848e-06;
+DC_Motor_K = 0.0040474;
+DC_Motor_L = 0.000265;
+DC_Motor_R = 0.0031974;

@@ -14,3 +14,9 @@ DC_Motor_J = 1.7848e-06;
 DC_Motor_K = 0.0040474;
 DC_Motor_L = 0.000265;
 DC_Motor_R = 0.0031974;
+%% New PID tuned parameters are
+% This is for 1 second response time
+P = 0.0;
+I = 0.000540928161062007;
+D = 0;
+FilterCoefficient = 100;
